@@ -1,0 +1,30 @@
+name: CI
+# https://github.com/actions/virtual-environments
+on:
+  push:
+    branches: [ go-containerregistry-0.5.1 ]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: build
+        run: |
+          go mod edit --replace github.com/google/go-containerregistry@v0.4.1-0.20210128200529-19c2b639fab1=github.com/google/go-containerregistry@v0.5.1
+          go mod vendor
+          export TAG=`git describe --match=$(git rev-parse --short=8 HEAD) --always --dirty --abbrev=8`
+          # fix for "layer does not exists" error
+          # https://github.com/moby/moby/issues/37965
+          export DOCKER_BUILDKIT=1
+          docker build -f deploy/Dockerfile_debug -t executor:mtr-0.5.1 .
+          docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}" mtr.external.otc.telekomcloud.com
+          docker images
+          docker tag executor:mtr-0.5.1 mtr.external.otc.telekomcloud.com/mtr/kaniko:mtr-0.5.1
+          docker push mtr.external.otc.telekomcloud.com/mtr/kaniko:mtr-0.5.1
+        env:
+          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+          DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
